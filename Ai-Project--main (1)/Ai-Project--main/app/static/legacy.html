@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAI3101 - Board Game AI Engine (Enhanced)</title>
+  <style>
+    :root {
+      --bg: #0f172a; --panel: #1e293b; --border: #334155; --text: #f8fafc;
+      --text-muted: #94a3b8; --accent: #38bdf8; --accent-hover: #0284c7;
+      --win: #22c55e; --human: #ef4444; --computer: #eab308;
+      --best: #22c55e; --good: #06b6d4; --inacc: #eab308; --mistake: #f97316; --blunder: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: var(--panel); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tab-btn { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; transition: all 0.2s; }
+    .tab-btn:hover { color: var(--text); border-color: var(--accent); }
+    .tab-btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+    main { flex: 1; padding: 16px 20px; max-width: 1280px; margin: 0 auto; width: 100%; }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* Controls Panel */
+    .controls { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .control-group { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
+    label { color: var(--text-muted); font-size: 0.8rem; }
+    select, input, button { background: #0f172a; border: 1px solid var(--border); color: var(--text); padding: 7px 11px; border-radius: 6px; font-size: 0.88rem; outline: none; }
+    select:focus, input:focus { border-color: var(--accent); }
+    .btn-primary { background: var(--accent); color: #000; font-weight: 600; cursor: pointer; border: none; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: #334155; color: var(--text); cursor: pointer; border: none; }
+    .btn-secondary:hover { background: #475569; }
+    .btn-pass { background: #64748b; color: white; cursor: pointer; border: none; display: none; }
+    .btn-analyze { background: #8b5cf6; color: #fff; font-weight: bold; cursor: pointer; border: none; display: none; }
+
+    /* Split-screen Layout */
+    .game-layout { display: grid; grid-template-columns: 1fr 340px; gap: 18px; }
+    @media (max-width: 860px) { .game-layout { grid-template-columns: 1fr; } }
+    .board-container { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 480px; position: relative; }
+    .thinking-overlay { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.75); display: none; align-items: center; justify-content: center; font-size: 1.15rem; font-weight: 600; color: var(--accent); border-radius: 8px; z-index: 10; }
+    .status-bar { margin-bottom: 12px; font-size: 1.1rem; font-weight: 600; text-align: center; }
+    .sub-status { font-size: 0.88rem; color: var(--text-muted); text-align: center; margin-bottom: 10px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; margin-left: 6px; }
+
+    /* Eval Bar */
+    .eval-bar-wrap { width: 100%; max-width: 360px; height: 16px; background: var(--computer); border-radius: 8px; overflow: hidden; margin-bottom: 14px; position: relative; display: flex; border: 1px solid var(--border); }
+    .eval-fill { height: 100%; background: var(--human); transition: width 0.3s ease; }
+    .eval-text { position: absolute; width: 100%; text-align: center; font-size: 10px; font-weight: bold; color: #fff; line-height: 16px; text-shadow: 0 0 3px #000; }
+
+    /* XO Board */
+    .xo-board { display: grid; grid-template-columns: repeat(3, 90px); grid-template-rows: repeat(3, 90px); gap: 8px; }
+    .xo-cell { background: #0f172a; border: 2px solid var(--border); border-radius: 8px; font-size: 2.5rem; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; position: relative; }
+    .xo-cell:hover { border-color: var(--accent); }
+    .xo-cell.winning { background: rgba(34, 197, 94, 0.25); border-color: var(--win); }
+    .xo-cell.hint-cell { border-color: #facc15; outline: 3px solid #facc15; animation: pulse 0.8s infinite alternate; }
+    .xo-cell.played-cell { border-color: #ef4444; outline: 3px solid #ef4444; }
+
+    /* Connect 4 Board */
+    .c4-board-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .c4-heat-row { display: grid; grid-template-columns: repeat(7, 50px); gap: 6px; height: 18px; margin-bottom: 2px; }
+    .c4-heat-cell { font-size: 10px; font-weight: bold; text-align: center; color: var(--accent); }
+    .c4-col-buttons { display: grid; grid-template-columns: repeat(7, 50px); gap: 6px; }
+    .c4-drop-btn { background: #334155; border: none; color: var(--text); padding: 4px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+    .c4-drop-btn:hover { background: var(--accent); color: #000; }
+    .c4-drop-btn.hint-col { background: #facc15; color: #000; font-weight: bold; }
+    .c4-board { display: grid; grid-template-columns: repeat(7, 50px); grid-template-rows: repeat(6, 50px); gap: 6px; background: #1e3a8a; padding: 10px; border-radius: 10px; border: 3px solid #172554; }
+    .c4-cell { width: 50px; height: 50px; background: var(--bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .c4-piece { width: 44px; height: 44px; border-radius: 50%; }
+    .c4-piece.human { background: var(--human); box-shadow: inset 0 0 8px rgba(0,0,0,0.4); }
+    .c4-piece.computer { background: var(--computer); box-shadow: inset 0 0 8px rgba(0,0,0,0.4); }
+    .c4-piece.winning { outline: 4px solid var(--win); animation: pulse 1s infinite alternate; }
+
+    /* Seega Board */
+    .seega-board { display: grid; grid-template-columns: repeat(5, 60px); grid-template-rows: repeat(5, 60px); gap: 6px; }
+    .seega-cell { background: #0f172a; border: 2px solid var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+    .seega-cell.center-cell { border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
+    .seega-cell.center-cell::after { content: '★'; position: absolute; font-size: 10px; color: #f59e0b; bottom: 2px; right: 4px; }
+    .seega-cell.legal-target { background: rgba(56, 189, 248, 0.25); border-color: var(--accent); }
+    .seega-cell.selected { border-color: #38bdf8; outline: 3px solid #38bdf8; }
+    .seega-cell.hint-cell { border-color: #facc15; outline: 3px solid #facc15; }
+    .seega-piece { width: 42px; height: 42px; border-radius: 50%; border: 2px solid #475569; }
+    .seega-piece.human { background: #09090b; border-color: #71717a; }
+    .seega-piece.computer { background: #f8fafc; border-color: #cbd5e1; }
+
+    /* Sidebar & Panels */
+    .sidebar { display: flex; flex-direction: column; gap: 14px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .card h3 { font-size: 0.92rem; color: var(--accent); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+    .stat-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.88rem; }
+    .stat-label { color: var(--text-muted); }
+    .stat-value { font-weight: 600; }
+    .btn-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+    /* Moves Scroll List */
+    .move-log { max-height: 140px; overflow-y: auto; font-size: 0.82rem; border: 1px solid var(--border); border-radius: 4px; padding: 6px; background: #0f172a; }
+    .move-item { padding: 3px 6px; border-radius: 3px; display: flex; justify-content: space-between; cursor: pointer; }
+    .move-item:hover { background: #1e293b; }
+    .move-item.active { background: #334155; font-weight: bold; }
+
+    /* Review View */
+    .review-grid { display: grid; grid-template-columns: 1fr 380px; gap: 18px; margin-top: 14px; }
+    @media (max-width: 860px) { .review-grid { grid-template-columns: 1fr; } }
+    .review-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .class-Best { color: var(--best); font-weight: bold; }
+    .class-Good { color: var(--good); font-weight: bold; }
+    .class-Inaccuracy { color: var(--inacc); font-weight: bold; }
+    .class-Mistake { color: var(--mistake); font-weight: bold; }
+    .class-Blunder { color: var(--blunder); font-weight: bold; }
+
+    /* Tree View */
+    .tree-node { margin-left: 14px; font-family: monospace; font-size: 0.8rem; line-height: 1.5; }
+    .tree-pruned { color: #ef4444; text-decoration: line-through; }
+
+    @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.06); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CAI3101: Game Engine + AI Review</h1>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchView('play')">Play Game</button>
+      <button class="tab-btn" onclick="switchView('review')">Game Review</button>
+      <button class="tab-btn" onclick="switchView('benchmark')">Benchmark</button>
+      <button class="tab-btn" onclick="switchView('ai-vs-ai')">AI vs AI</button>
+      <button class="tab-btn" onclick="switchView('tree')">Search Tree (XO)</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 1. Play Game View -->
+    <div id="play-view" class="view active">
+      <div class="controls">
+        <div class="control-group">
+          <label>Game</label>
+          <select id="game-select" onchange="startNewGame()">
+            <option value="xo">Tic-Tac-Toe (XO)</option>
+            <option value="connect4">Connect 4</option>
+            <option value="seega">Seega</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Mode</label>
+          <select id="mode-select" onchange="startNewGame()">
+            <option value="human_vs_computer">Human vs Computer</option>
+            <option value="friends">Friends (Hot-seat PvP)</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>First Player</label>
+          <select id="first-player-select" onchange="startNewGame()">
+            <option value="human">Player 1 / Human</option>
+            <option value="computer">Player 2 / Computer</option>
+          </select>
+        </div>
+        <div class="control-group" id="algo-group">
+          <label>AI Algorithm</label>
+          <select id="algo-select">
+            <option value="alphabeta">Alpha-Beta Pruning</option>
+            <option value="minimax">Minimax</option>
+          </select>
+        </div>
+        <div class="control-group" id="level-group">
+          <label>Difficulty</label>
+          <select id="level-select">
+            <option value="hard">Hard</option>
+            <option value="expert">Expert (Deepening)</option>
+            <option value="medium">Medium</option>
+            <option value="easy">Easy</option>
+          </select>
+        </div>
+        <button class="btn-primary" onclick="startNewGame()">New Game</button>
+        <button id="pass-btn" class="btn-pass" onclick="handlePass()">Pass Turn</button>
+        <button id="analyze-btn" class="btn-analyze" onclick="requestAnalysis()">🔍 Analyze Game</button>
+      </div>
+
+      <div class="game-layout">
+        <div class="board-container">
+          <div id="thinking-overlay" class="thinking-overlay">Computer thinking...</div>
+          <div id="forced-win-badge" class="badge" style="display:none; background:#8b5cf6; margin-bottom:8px;"></div>
+          <div id="status-bar" class="status-bar">Human's turn</div>
+          <div id="sub-status" class="sub-status"></div>
+
+          <!-- Live Eval Bar (Toggleable) -->
+          <div id="live-eval-wrap" class="eval-bar-wrap" style="display:none;">
+            <div id="eval-fill" class="eval-fill" style="width: 50%;"></div>
+            <div id="eval-text" class="eval-text">Eval: 50% / 50%</div>
+          </div>
+
+          <div id="board-root"></div>
+        </div>
+
+        <div class="sidebar">
+          <!-- Game Tools Card -->
+          <div class="card">
+            <h3>Game Controls</h3>
+            <div class="btn-row">
+              <button id="hint-btn" class="btn-secondary" onclick="requestHint()">💡 Hint (3 left)</button>
+              <button class="btn-secondary" onclick="undoMove()">↩ Undo</button>
+              <button class="btn-secondary" onclick="redoMove()">↪ Redo</button>
+            </div>
+            <div style="margin-top:10px; display:flex; gap:12px; font-size:0.8rem; align-items:center;">
+              <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                <input type="checkbox" id="live-eval-toggle" onchange="toggleLiveEval()"> Live Eval Bar
+              </label>
+              <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                <input type="checkbox" id="smart-seega-toggle"> Smart Seega Placement
+              </label>
+            </div>
+            <div class="btn-row" style="margin-top:10px;">
+              <button class="btn-secondary" style="font-size:0.75rem;" onclick="saveGameJSON()">💾 Save JSON</button>
+              <button class="btn-secondary" style="font-size:0.75rem;" onclick="document.getElementById('load-file').click()">📂 Load JSON</button>
+              <input type="file" id="load-file" style="display:none;" accept=".json" onchange="loadGameJSON(event)">
+            </div>
+          </div>
+
+          <!-- Match Moves Card -->
+          <div class="card">
+            <h3>Match Moves (<span id="move-count">0</span>)</h3>
+            <div id="move-log" class="move-log"></div>
+          </div>
+
+          <!-- Last AI Info Card -->
+          <div class="card" id="ai-telemetry-card">
+            <h3>Last AI Move</h3>
+            <div class="stat-row"><span class="stat-label">Move:</span><span id="ai-move" class="stat-value">-</span></div>
+            <div class="stat-row"><span class="stat-label">Nodes Visited:</span><span id="ai-nodes" class="stat-value">-</span></div>
+            <div class="stat-row"><span class="stat-label">Search Time:</span><span id="ai-time" class="stat-value">-</span></div>
+          </div>
+
+          <!-- Seega Details Card -->
+          <div id="seega-card" class="card" style="display:none;">
+            <h3>Seega Metrics</h3>
+            <div class="stat-row"><span class="stat-label">Phase:</span><span id="seega-phase" class="stat-value">-</span></div>
+            <div class="stat-row"><span class="stat-label">Human (Black):</span><span id="seega-h-count" class="stat-value">-</span></div>
+            <div class="stat-row"><span class="stat-label">Computer (White):</span><span id="seega-c-count" class="stat-value">-</span></div>
+            <div class="stat-row"><span class="stat-label">No-Capture Count:</span><span id="seega-no-capture" class="stat-value">0 / 40</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Game Review / Post-Game Analysis View -->
+    <div id="review-view" class="view">
+      <div class="controls">
+        <h2 style="font-size:1.1rem; color:var(--accent);">Post-Game Analysis (Chess Engine Style)</h2>
+        <button class="btn-primary" onclick="requestAnalysis()">Re-Run Review</button>
+        <button class="btn-secondary" onclick="switchView('play')">Back to Play</button>
+      </div>
+
+      <div id="review-status" style="font-weight:600; margin-bottom:10px;">Play a game to completion, then click "Analyze Game"!</div>
+
+      <div id="review-content" style="display:none;">
+        <div class="review-summary">
+          <div class="card">
+            <h3 id="rev-p1-title">Player 1 Accuracy</h3>
+            <div style="font-size:2rem; font-weight:bold; color:var(--win); margin:6px 0;" id="rev-p1-acc">-</div>
+            <div id="rev-p1-counts" style="font-size:0.85rem;"></div>
+          </div>
+          <div class="card">
+            <h3 id="rev-p2-title">Player 2 Accuracy</h3>
+            <div style="font-size:2rem; font-weight:bold; color:var(--accent); margin:6px 0;" id="rev-p2-acc">-</div>
+            <div id="rev-p2-counts" style="font-size:0.85rem;"></div>
+          </div>
+        </div>
+
+        <div id="crit-moment-card" class="card" style="display:none; margin-bottom:12px; background:rgba(239,68,68,0.1); border-color:#ef4444;">
+          <h3 style="color:#ef4444;">⚠️ Critical Turning Point</h3>
+          <div id="crit-moment-text" style="font-size:0.9rem;"></div>
+        </div>
+
+        <div class="review-grid">
+          <div class="board-container">
+            <div style="margin-bottom:8px; font-weight:bold; font-size:0.95rem;" id="rev-step-caption">Step -</div>
+            <div id="rev-board-root"></div>
+            <div class="btn-row" style="margin-top:12px;">
+              <button class="btn-secondary" onclick="stepReview(-1)">◀ Prev Move (←)</button>
+              <button class="btn-secondary" onclick="stepReview(1)">Next Move (→) ▶</button>
+            </div>
+            <div id="rev-explanation" style="margin-top:10px; font-size:0.88rem; text-align:center;"></div>
+          </div>
+
+          <div class="sidebar">
+            <div class="card">
+              <h3>Evaluation Over Time</h3>
+              <canvas id="rev-chart" style="width:100%; height:160px; background:#0f172a; border-radius:4px;"></canvas>
+            </div>
+            <div class="card">
+              <h3>Move History & Classification</h3>
+              <div id="rev-moves-list" style="max-height:280px; overflow-y:auto; font-size:0.82rem;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Search Tree Visualizer (XO) View -->
+    <div id="tree-view" class="view">
+      <div class="controls">
+        <h2 style="font-size:1.1rem; color:var(--accent);">Alpha-Beta Search Tree Visualizer (XO)</h2>
+        <div class="control-group">
+          <label>Depth</label>
+          <select id="tree-depth">
+            <option value="2">Depth 2 (Compact)</option>
+            <option value="3">Depth 3 (Detailed)</option>
+          </select>
+        </div>
+        <button class="btn-primary" onclick="loadSearchTree()">Generate Tree</button>
+        <button class="btn-secondary" onclick="switchView('play')">Back to Play</button>
+      </div>
+      <div class="card" style="overflow-x:auto;">
+        <div id="tree-root" style="font-family:monospace; font-size:0.85rem; line-height:1.6;">Click "Generate Tree" to inspect Alpha-Beta cuts.</div>
+      </div>
+    </div>
+
+    <!-- 4. Benchmark View -->
+    <div id="benchmark-view" class="view">
+      <div class="controls">
+        <div class="control-group">
+          <label>Game</label>
+          <select id="bm-game-select">
+            <option value="xo">Tic-Tac-Toe (XO)</option>
+            <option value="connect4">Connect 4</option>
+            <option value="seega">Seega</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Positions</label>
+          <input type="number" id="bm-n" value="20" min="1" max="100" style="width: 80px;">
+        </div>
+        <button class="btn-primary" onclick="runBenchmark()">Run Comparison</button>
+      </div>
+
+      <div id="bm-status" style="font-weight: 600; margin-bottom: 12px;"></div>
+      <div id="bm-summary" class="summary-grid" style="display:none;"></div>
+      <canvas id="bm-chart" style="display:none;"></canvas>
+      <div id="bm-table-wrap" style="overflow-x:auto;"></div>
+    </div>
+
+    <!-- 5. AI vs AI View -->
+    <div id="ai-vs-ai-view" class="view">
+      <div class="controls">
+        <div class="control-group">
+          <label>Game</label>
+          <select id="aiai-game">
+            <option value="xo">Tic-Tac-Toe</option>
+            <option value="connect4">Connect 4</option>
+            <option value="seega">Seega</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Player A</label>
+          <select id="aiai-algo-a"><option value="alphabeta">Alpha-Beta</option><option value="minimax">Minimax</option></select>
+          <select id="aiai-lvl-a"><option value="medium">Medium</option><option value="hard">Hard</option><option value="easy">Easy</option></select>
+        </div>
+        <div class="control-group">
+          <label>Player B</label>
+          <select id="aiai-algo-b"><option value="alphabeta">Alpha-Beta</option><option value="minimax">Minimax</option></select>
+          <select id="aiai-lvl-b"><option value="medium">Medium</option><option value="hard">Hard</option><option value="easy">Easy</option></select>
+        </div>
+        <button class="btn-primary" onclick="runAIvsAI()">Start Match</button>
+      </div>
+
+      <div class="game-layout">
+        <div class="board-container">
+          <div id="aiai-status" class="status-bar">Ready for AI vs AI</div>
+          <div id="aiai-board-root"></div>
+        </div>
+        <div class="sidebar">
+          <div class="card" style="max-height: 480px; overflow-y: auto;">
+            <h3>Match Moves</h3>
+            <div id="aiai-move-list" style="font-size: 0.85rem;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // --- Application State ---
+    let currentGame = "xo";
+    let currentMode = "human_vs_computer";
+    let currentState = null;
+    let selectedCell = null; // For Seega movement
+    let isThinking = false;
+    let legalMoves = [];
+    let winningCells = [];
+    let matchHistory = []; // [{move, state, player}] for undo/redo and analysis
+    let historyIndex = -1;
+    let hintsRemaining = 3;
+    let activeHintMove = null;
+    let c4Heatmap = {};
+
+    function switchView(viewName) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      const targetView = document.getElementById(`${viewName}-view`);
+      if (targetView) targetView.classList.add('active');
+      const clickedBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick')?.includes(viewName));
+      if (clickedBtn) clickedBtn.classList.add('active');
+
+      if (viewName === 'play' && !currentState) startNewGame();
+      if (viewName === 'tree') loadSearchTree();
+    }
+
+    // --- GAME ENGINE PLAY ---
+    async function startNewGame() {
+      currentGame = document.getElementById('game-select').value;
+      currentMode = document.getElementById('mode-select').value;
+      const firstPlayer = document.getElementById('first-player-select').value;
+      selectedCell = null;
+      winningCells = [];
+      matchHistory = [];
+      historyIndex = -1;
+      hintsRemaining = 3;
+      activeHintMove = null;
+      c4Heatmap = {};
+      updateHintBtnText();
+
+      document.getElementById('analyze-btn').style.display = 'none';
+      document.getElementById('forced-win-badge').style.display = 'none';
+      document.getElementById('ai-move').innerText = '-';
+      document.getElementById('ai-nodes').innerText = '-';
+      document.getElementById('ai-time').innerText = '-';
+
+      // Hide AI settings if in Friends mode
+      const isPvP = currentMode === 'friends';
+      document.getElementById('algo-group').style.display = isPvP ? 'none' : 'flex';
+      document.getElementById('level-group').style.display = isPvP ? 'none' : 'flex';
+      document.getElementById('ai-telemetry-card').style.display = isPvP ? 'none' : 'block';
+
+      const res = await fetch(`/api/${currentGame}/new`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ first_player: firstPlayer, mode: currentMode })
+      });
+      const data = await res.json();
+      currentState = data.state;
+      legalMoves = data.legal_moves;
+      matchHistory.push({ move: null, state: currentState, player: data.current_player });
+      historyIndex = 0;
+
+      updateUI(data);
+
+      if (currentMode === 'human_vs_computer' && data.current_player === 'computer') {
+        triggerAIMove();
+      }
+    }
+
+    function updateHintBtnText() {
+      document.getElementById('hint-btn').innerText = `💡 Hint (${hintsRemaining} left)`;
+    }
+
+    function updateUI(data) {
+      document.getElementById('status-bar').innerText = data.message || `${data.current_player.toUpperCase()}'s turn`;
+      if (data.winning_cells) winningCells = data.winning_cells;
+
+      // Seega info
+      const seegaCard = document.getElementById('seega-card');
+      const passBtn = document.getElementById('pass-btn');
+      if (currentGame === 'seega') {
+        seegaCard.style.display = 'block';
+        document.getElementById('seega-phase').innerText = (currentState.phase || 'PLACEMENT').toUpperCase();
+        document.getElementById('seega-h-count').innerText = currentState.human_pieces ?? 0;
+        document.getElementById('seega-c-count').innerText = currentState.computer_pieces ?? 0;
+        document.getElementById('seega-no-capture').innerText = `${currentState.no_capture_counter ?? 0} / 40`;
+
+        if (data.legal_moves && data.legal_moves.length === 0 && data.status === 'ongoing') {
+          passBtn.style.display = 'inline-block';
+        } else {
+          passBtn.style.display = 'none';
+        }
+      } else {
+        seegaCard.style.display = 'none';
+        passBtn.style.display = 'none';
+      }
+
+      if (data.status === 'terminal') {
+        document.getElementById('analyze-btn').style.display = 'inline-block';
+      }
+
+      updateMoveLog();
+      renderBoard();
+      if (document.getElementById('live-eval-toggle').checked) updateLiveEval();
+    }
+
+    function updateMoveLog() {
+      const log = document.getElementById('move-log');
+      log.innerHTML = '';
+      const actualMoves = matchHistory.filter(h => h.move !== null);
+      document.getElementById('move-count').innerText = actualMoves.length;
+      actualMoves.forEach((h, i) => {
+        const item = document.createElement('div');
+        item.className = `move-item ${i === historyIndex - 1 ? 'active' : ''}`;
+        const pLabel = (currentMode === 'friends' ? (h.player === 'human' ? 'P1' : 'P2') : (h.player === 'human' ? 'You' : 'AI'));
+        item.innerHTML = `<span><strong>#${i + 1}</strong> ${pLabel}</span><span>${JSON.stringify(h.move)}</span>`;
+        log.appendChild(item);
+      });
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function renderBoard() {
+      const root = document.getElementById('board-root');
+      root.innerHTML = '';
+      if (!currentState) return;
+
+      if (currentGame === 'xo') renderXO(root);
+      else if (currentGame === 'connect4') renderConnect4(root);
+      else if (currentGame === 'seega') renderSeega(root);
+    }
+
+    function renderXO(root) {
+      const board = document.createElement('div');
+      board.className = 'xo-board';
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'xo-cell';
+          const val = currentState.board[r][c];
+          cell.innerText = val === 'human' ? 'X' : (val === 'computer' ? 'O' : '');
+          if (val === 'human') cell.style.color = 'var(--human)';
+          if (val === 'computer') cell.style.color = 'var(--computer)';
+          if (winningCells.some(wc => wc[0] === r && wc[1] === c)) cell.classList.add('winning');
+          if (activeHintMove && activeHintMove[0] === r && activeHintMove[1] === c) cell.classList.add('hint-cell');
+
+          cell.onclick = () => onCellClick([r, c]);
+          board.appendChild(cell);
+        }
+      }
+      root.appendChild(board);
+    }
+
+    function renderConnect4(root) {
+      const wrap = document.createElement('div');
+      wrap.className = 'c4-board-wrap';
+
+      // Column Heatmap row
+      const heatRow = document.createElement('div');
+      heatRow.className = 'c4-heat-row';
+      for (let c = 0; c < 7; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'c4-heat-cell';
+        if (c4Heatmap[c] !== undefined) cell.innerText = c4Heatmap[c];
+        heatRow.appendChild(cell);
+      }
+      wrap.appendChild(heatRow);
+
+      const btnRow = document.createElement('div');
+      btnRow.className = 'c4-col-buttons';
+      for (let c = 0; c < 7; c++) {
+        const btn = document.createElement('button');
+        btn.className = `c4-drop-btn ${activeHintMove === c ? 'hint-col' : ''}`;
+        btn.innerText = `Col ${c}`;
+        btn.onclick = () => onCellClick(c);
+        btnRow.appendChild(btn);
+      }
+      wrap.appendChild(btnRow);
+
+      const board = document.createElement('div');
+      board.className = 'c4-board';
+      for (let r = 0; r < 6; r++) {
+        for (let c = 0; c < 7; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'c4-cell';
+          const val = currentState.board[r][c];
+          if (val) {
+            const piece = document.createElement('div');
+            piece.className = `c4-piece ${val}`;
+            if (winningCells.some(wc => wc[0] === r && wc[1] === c)) piece.classList.add('winning');
+            cell.appendChild(piece);
+          }
+          board.appendChild(cell);
+        }
+      }
+      wrap.appendChild(board);
+      root.appendChild(wrap);
+    }
+
+    function renderSeega(root) {
+      const board = document.createElement('div');
+      board.className = 'seega-board';
+
+      let validDests = [];
+      if (selectedCell && currentState.phase === 'movement') {
+        validDests = legalMoves
+          .filter(m => m[0][0] === selectedCell[0] && m[0][1] === selectedCell[1])
+          .map(m => m[1]);
+      }
+
+      for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 5; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'seega-cell';
+          if (r === 2 && c === 2) cell.classList.add('center-cell');
+          if (selectedCell && selectedCell[0] === r && selectedCell[1] === c) cell.classList.add('selected');
+          if (validDests.some(d => d[0] === r && d[1] === c)) cell.classList.add('legal-target');
+
+          // Hint destination
+          if (activeHintMove && activeHintMove[1] && activeHintMove[1][0] === r && activeHintMove[1][1] === c) {
+            cell.classList.add('hint-cell');
+          }
+
+          const pieceVal = currentState.board[r][c];
+          if (pieceVal) {
+            const piece = document.createElement('div');
+            piece.className = `seega-piece ${pieceVal}`;
+            cell.appendChild(piece);
+          }
+
+          cell.onclick = () => onSeegaCellClick(r, c);
+          board.appendChild(cell);
+        }
+      }
+      root.appendChild(board);
+    }
+
+    async function onCellClick(move) {
+      if (isThinking || !currentState) return;
+      activeHintMove = null;
+      c4Heatmap = {};
+
+      try {
+        const res = await fetch(`/api/${currentGame}/move`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: currentState, move: move, mode: currentMode })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          alert(err.detail || "Illegal move");
+          return;
+        }
+        const data = await res.json();
+        const mover = currentState.player;
+        currentState = data.state;
+        legalMoves = data.legal_moves;
+
+        // Truncate redo tree if user branched
+        if (historyIndex < matchHistory.length - 1) {
+          matchHistory = matchHistory.slice(0, historyIndex + 1);
+        }
+        matchHistory.push({ move: move, state: currentState, player: mover });
+        historyIndex = matchHistory.length - 1;
+
+        updateUI(data);
+
+        if (currentMode === 'human_vs_computer' && data.status === 'ongoing' && data.current_player === 'computer') {
+          triggerAIMove();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function onSeegaCellClick(r, c) {
+      if (isThinking || !currentState) return;
+      if (currentState.phase === 'placement') {
+        onCellClick([r, c]);
+        return;
+      }
+
+      // Movement Phase
+      const currP = currentState.player;
+      const clickedPiece = currentState.board[r][c];
+      if (clickedPiece === currP) {
+        selectedCell = [r, c];
+        renderBoard();
+        return;
+      }
+
+      if (selectedCell && !clickedPiece) {
+        const move = [selectedCell, [r, c]];
+        selectedCell = null;
+        onCellClick(move);
+      }
+    }
+
+    async function handlePass() {
+      if (isThinking) return;
+      const res = await fetch(`/api/${currentGame}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: currentState, move: null, mode: currentMode })
+      });
+      const data = await res.json();
+      currentState = data.state;
+      legalMoves = data.legal_moves;
+      matchHistory.push({ move: null, state: currentState, player: 'pass' });
+      historyIndex++;
+      updateUI(data);
+      if (currentMode === 'human_vs_computer' && data.status === 'ongoing' && data.current_player === 'computer') {
+        triggerAIMove();
+      }
+    }
+
+    async function triggerAIMove() {
+      isThinking = true;
+      document.getElementById('thinking-overlay').style.display = 'flex';
+      const algo = document.getElementById('algo-select').value;
+      const level = document.getElementById('level-select').value;
+
+      try {
+        const res = await fetch(`/api/${currentGame}/ai-move`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: currentState, algorithm: algo, level: level })
+        });
+        const data = await res.json();
+        const mover = currentState.player;
+        currentState = data.state;
+        legalMoves = data.legal_moves;
+
+        matchHistory.push({ move: data.move, state: currentState, player: mover });
+        historyIndex = matchHistory.length - 1;
+
+        document.getElementById('ai-move').innerText = JSON.stringify(data.move);
+        document.getElementById('ai-nodes').innerText = data.nodes.toLocaleString();
+        document.getElementById('ai-time').innerText = `${data.time_ms} ms`;
+
+        updateUI(data);
+
+        // If computer plays again (Seega placement or opponent passed)
+        if (data.status === 'ongoing' && data.current_player === 'computer') {
+          setTimeout(triggerAIMove, 250);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        isThinking = false;
+        document.getElementById('thinking-overlay').style.display = 'none';
+      }
+    }
+
+    // --- FEATURE 2: HINT ---
+    async function requestHint() {
+      if (hintsRemaining <= 0) {
+        alert("No hints remaining for this match!");
+        return;
+      }
+      try {
+        const res = await fetch(`/api/${currentGame}/hint`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: currentState, algorithm: "alphabeta" })
+        });
+        const data = await res.json();
+        if (!data.best_move) {
+          alert(data.message || "No hint available.");
+          return;
+        }
+        hintsRemaining--;
+        updateHintBtnText();
+
+        activeHintMove = data.best_move;
+        // Heatmap for Connect 4
+        if (currentGame === 'connect4' && data.scores_list) {
+          c4Heatmap = {};
+          data.scores_list.forEach(item => {
+            c4Heatmap[item.move] = item.score;
+          });
+        }
+        renderBoard();
+        document.getElementById('sub-status').innerText = `💡 Recommended move: ${JSON.stringify(data.best_move)} (${data.nodes} nodes evaluated)`;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // --- UNDO / REDO ---
+    function undoMove() {
+      if (historyIndex <= 0) return;
+      historyIndex--;
+      currentState = matchHistory[historyIndex].state;
+      legalMoves = []; // Refresh on next turn
+      renderBoard();
+      updateMoveLog();
+      document.getElementById('status-bar').innerText = `Undone to step #${historyIndex}`;
+    }
+
+    function redoMove() {
+      if (historyIndex >= matchHistory.length - 1) return;
+      historyIndex++;
+      currentState = matchHistory[historyIndex].state;
+      renderBoard();
+      updateMoveLog();
+      document.getElementById('status-bar').innerText = `Restored to step #${historyIndex}`;
+    }
+
+    // --- SAVE / LOAD GAME JSON ---
+    function saveGameJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+        game: currentGame,
+        mode: currentMode,
+        history: matchHistory
+      }));
+      const dlAnchor = document.createElement('a');
+      dlAnchor.setAttribute("href", dataStr);
+      dlAnchor.setAttribute("download", `game_${currentGame}_${Date.now()}.json`);
+      document.body.appendChild(dlAnchor);
+      dlAnchor.click();
+      dlAnchor.remove();
+    }
+
+    function loadGameJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          currentGame = parsed.game;
+          currentMode = parsed.mode || 'human_vs_computer';
+          matchHistory = parsed.history;
+          historyIndex = matchHistory.length - 1;
+          currentState = matchHistory[historyIndex].state;
+          document.getElementById('game-select').value = currentGame;
+          document.getElementById('mode-select').value = currentMode;
+          updateUI({ state: currentState, status: 'ongoing', message: 'Game loaded from JSON' });
+        } catch (err) {
+          alert("Invalid game JSON file!");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // --- LIVE EVAL BAR ---
+    function toggleLiveEval() {
+      const isChecked = document.getElementById('live-eval-toggle').checked;
+      document.getElementById('live-eval-wrap').style.display = isChecked ? 'flex' : 'none';
+      if (isChecked) updateLiveEval();
+    }
+
+    async function updateLiveEval() {
+      if (!currentState) return;
+      try {
+        const res = await fetch(`/api/${currentGame}/eval`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: currentState })
+        });
+        const data = await res.json();
+        const p1Pct = Math.round(data.p1_win_prob * 100);
+        const p2Pct = 100 - p1Pct;
+        document.getElementById('eval-fill').style.width = `${p1Pct}%`;
+        document.getElementById('eval-text').innerText = `P1: ${p1Pct}% | P2: ${p2Pct}% (Score: ${data.score})`;
+
+        // Forced win indicator
+        const badge = document.getElementById('forced-win-badge');
+        if (Math.abs(data.score) >= 900) {
+          badge.style.display = 'inline-block';
+          badge.innerText = data.score > 0 ? "🏆 Forced Win for P1 detected!" : "⚠️ Forced Win for P2 detected!";
+        } else {
+          badge.style.display = 'none';
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // --- FEATURE 3: POST-GAME ANALYSIS ---
+    let analysisData = null;
+    let reviewStepIdx = 0;
+
+    async function requestAnalysis() {
+      switchView('review');
+      document.getElementById('review-status').innerText = 'Running comprehensive game review...';
+      document.getElementById('review-content').style.display = 'none';
+
+      // Collect all moves made
+      const moveList = matchHistory.filter(h => h.move !== null).map(h => h.move);
+      const firstP = matchHistory[0]?.state?.player || 'human';
+
+      const res = await fetch(`/api/${currentGame}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_player: firstP,
+          mode: currentMode,
+          moves: moveList,
+          depth_override: null
+        })
+      });
+      analysisData = await res.json();
+      document.getElementById('review-status').innerText = `Analysis complete for ${currentGame.toUpperCase()} (${analysisData.total_moves} moves)`;
+      document.getElementById('review-content').style.display = 'block';
+
+      // Summary Cards
+      document.getElementById('rev-p1-title').innerText = `${analysisData.player1.label} Accuracy`;
+      document.getElementById('rev-p1-acc').innerText = `${analysisData.player1.accuracy}%`;
+      document.getElementById('rev-p1-counts').innerHTML = renderClassCounts(analysisData.player1.counts);
+
+      document.getElementById('rev-p2-title').innerText = `${analysisData.player2.label} Accuracy`;
+      document.getElementById('rev-p2-acc').innerText = `${analysisData.player2.accuracy}%`;
+      document.getElementById('rev-p2-counts').innerHTML = renderClassCounts(analysisData.player2.counts);
+
+      // Critical moment
+      const critCard = document.getElementById('crit-moment-card');
+      if (analysisData.critical_moment) {
+        critCard.style.display = 'block';
+        const cm = analysisData.critical_moment;
+        document.getElementById('crit-moment-text').innerHTML = `
+          Move #${cm.move_no} by <strong>${cm.player.toUpperCase()}</strong>: Played <code>${JSON.stringify(cm.played)}</code> instead of Best Move <code>${JSON.stringify(cm.best)}</code> (${cm.classification}, loss: ${Math.round(cm.loss * 100)}%).
+        `;
+      } else {
+        critCard.style.display = 'none';
+      }
+
+      // Populate Moves List
+      const listWrap = document.getElementById('rev-moves-list');
+      listWrap.innerHTML = '';
+      analysisData.steps.forEach((st, idx) => {
+        const row = document.createElement('div');
+        row.style.padding = '5px 8px';
+        row.style.borderBottom = '1px solid var(--border)';
+        row.style.cursor = 'pointer';
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.className = `rev-row-${idx}`;
+        row.innerHTML = `
+          <span><strong>#${st.move_no}</strong> [${st.player.toUpperCase()}] ${JSON.stringify(st.played)}</span>
+          <span class="class-${st.classification}">${st.classification}</span>
+        `;
+        row.onclick = () => jumpToReviewStep(idx);
+        listWrap.appendChild(row);
+      });
+
+      renderReviewChart();
+      jumpToReviewStep(0);
+    }
+
+    function renderClassCounts(counts) {
+      return `
+        <span class="class-Best">★ Best: ${counts.Best || 0}</span> |
+        <span class="class-Good">✔ Good: ${counts.Good || 0}</span> |
+        <span class="class-Inaccuracy">?! Inacc: ${counts.Inaccuracy || 0}</span> |
+        <span class="class-Mistake">? Mistake: ${counts.Mistake || 0}</span> |
+        <span class="class-Blunder">?? Blunder: ${counts.Blunder || 0}</span>
+      `;
+    }
+
+    function jumpToReviewStep(idx) {
+      if (!analysisData || idx < 0 || idx >= analysisData.steps.length) return;
+      reviewStepIdx = idx;
+      const step = analysisData.steps[idx];
+
+      document.querySelectorAll('#rev-moves-list > div').forEach((r, i) => {
+        r.style.background = i === idx ? '#334155' : 'transparent';
+      });
+
+      document.getElementById('rev-step-caption').innerText = `Move #${step.move_no} by ${step.player.toUpperCase()} - ${step.classification}`;
+      document.getElementById('rev-explanation').innerHTML = `
+        Played: <code>${JSON.stringify(step.played)}</code> (Score: ${step.played_score}). Best: <code>${JSON.stringify(step.best)}</code> (Score: ${step.best_score}).
+      `;
+
+      renderReviewBoard(step.state_after, step.played, step.best);
+    }
+
+    function stepReview(delta) {
+      jumpToReviewStep(reviewStepIdx + delta);
+    }
+
+    // Keyboard navigation
+    window.addEventListener('keydown', (e) => {
+      if (document.getElementById('review-view').classList.contains('active')) {
+        if (e.key === 'ArrowLeft') stepReview(-1);
+        if (e.key === 'ArrowRight') stepReview(1);
+      }
+    });
+
+    function renderReviewBoard(state, playedMove, bestMove) {
+      const root = document.getElementById('rev-board-root');
+      root.innerHTML = '';
+      if (currentGame === 'xo') {
+        const board = document.createElement('div');
+        board.className = 'xo-board';
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'xo-cell';
+            const val = state.board[r][c];
+            cell.innerText = val === 'human' ? 'X' : (val === 'computer' ? 'O' : '');
+            if (val === 'human') cell.style.color = 'var(--human)';
+            if (val === 'computer') cell.style.color = 'var(--computer)';
+
+            if (playedMove && playedMove[0] === r && playedMove[1] === c) cell.style.outline = '3px solid #ef4444';
+            if (bestMove && bestMove[0] === r && bestMove[1] === c) cell.style.outline = '3px solid #22c55e';
+            board.appendChild(cell);
+          }
+        }
+        root.appendChild(board);
+      } else if (currentGame === 'connect4') {
+        const board = document.createElement('div');
+        board.className = 'c4-board';
+        for (let r = 0; r < 6; r++) {
+          for (let c = 0; c < 7; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'c4-cell';
+            const val = state.board[r][c];
+            if (val) {
+              const p = document.createElement('div');
+              p.className = `c4-piece ${val}`;
+              cell.appendChild(p);
+            }
+            if (playedMove === c && r === 0) cell.style.outline = '2px solid #ef4444';
+            if (bestMove === c && r === 0) cell.style.outline = '2px solid #22c55e';
+            board.appendChild(cell);
+          }
+        }
+        root.appendChild(board);
+      } else if (currentGame === 'seega') {
+        const board = document.createElement('div');
+        board.className = 'seega-board';
+        for (let r = 0; r < 5; r++) {
+          for (let c = 0; c < 5; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'seega-cell';
+            if (r === 2 && c === 2) cell.classList.add('center-cell');
+            const val = state.board[r][c];
+            if (val) {
+              const p = document.createElement('div');
+              p.className = `seega-piece ${val}`;
+              cell.appendChild(p);
+            }
+            board.appendChild(cell);
+          }
+        }
+        root.appendChild(board);
+      }
+    }
+
+    function renderReviewChart() {
+      const canvas = document.getElementById('rev-chart');
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = canvas.clientWidth * dpr;
+      canvas.height = 160 * dpr;
+      ctx.scale(dpr, dpr);
+      const w = canvas.clientWidth;
+      const h = 160;
+
+      ctx.clearRect(0, 0, w, h);
+      // Zero line
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, h / 2);
+      ctx.lineTo(w, h / 2);
+      ctx.stroke();
+
+      const steps = analysisData.steps;
+      if (steps.length === 0) return;
+
+      const stepWidth = w / Math.max(1, steps.length - 1);
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      steps.forEach((st, i) => {
+        const x = i * stepWidth;
+        // Eval after is in [-1.0, 1.0]. -1 is bottom, +1 is top
+        const y = (h / 2) - (st.eval_after * (h / 2 - 10));
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    // --- FEATURE 4: SEARCH TREE VISUALIZER (XO) ---
+    async function loadSearchTree() {
+      const depth = document.getElementById('tree-depth').value;
+      const root = document.getElementById('tree-root');
+      root.innerText = 'Calculating Alpha-Beta search tree...';
+
+      const s = currentState || { board: [[null, null, null], [null, null, null], [null, null, null]], player: 'human' };
+      const res = await fetch(`/api/xo/tree-viz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: s, depth: parseInt(depth) })
+      });
+      const treeData = await res.json();
+      root.innerHTML = renderTreeNodeHTML(treeData);
+    }
+
+    function renderTreeNodeHTML(node, indent = 0) {
+      const pad = "&nbsp;".repeat(indent * 4);
+      const prunedClass = node.pruned ? 'tree-pruned' : '';
+      const moveStr = node.move ? `Move ${JSON.stringify(node.move)}` : 'Root';
+      const statusStr = node.pruned ? '✂ PRUNED' : `Val: ${node.value}`;
+      let html = `<div class="tree-node ${prunedClass}">${pad}↳ <strong>${moveStr}</strong> (${node.player}) [α:${node.alpha_in}, β:${node.beta_in}] -> ${statusStr}</div>`;
+      if (node.children) {
+        node.children.forEach(ch => {
+          html += renderTreeNodeHTML(ch, indent + 1);
+        });
+      }
+      return html;
+    }
+
+    // --- BENCHMARK ---
+    async function runBenchmark() {
+      const g = document.getElementById('bm-game-select').value;
+      const n = document.getElementById('bm-n').value;
+      const st = document.getElementById('bm-status');
+      st.innerText = `Running benchmark on ${g.toUpperCase()} with ${n} positions...`;
+
+      const res = await fetch(`/api/benchmark/${g}?n=${n}`);
+      const data = await res.json();
+      st.innerText = `Completed benchmark for ${g.toUpperCase()} (${data.n_positions} positions, depth ${data.depth})`;
+
+      const sumGrid = document.getElementById('bm-summary');
+      sumGrid.style.display = 'grid';
+      sumGrid.innerHTML = `
+        <div class="metric-card"><div class="stat-label">Minimax Avg Nodes</div><div class="metric-val">${data.averages.avg_minimax_nodes}</div></div>
+        <div class="metric-card"><div class="stat-label">Alpha-Beta Avg Nodes</div><div class="metric-val">${data.averages.avg_alphabeta_nodes}</div></div>
+        <div class="metric-card"><div class="stat-label">Ordered AB Avg Nodes</div><div class="metric-val">${data.averages.avg_alphabeta_ordered_nodes}</div></div>
+        <div class="metric-card"><div class="stat-label">Node Reduction %</div><div class="metric-val" style="color:var(--win);">${data.averages.avg_ordered_reduction_pct}%</div></div>
+      `;
+
+      renderBenchmarkChart(data.averages);
+
+      const wrap = document.getElementById('bm-table-wrap');
+      let html = `<table><thead><tr>
+        <th>Pos</th><th>Minimax Nodes</th><th>MM Time</th>
+        <th>Alpha-Beta Nodes</th><th>AB Time</th>
+        <th>Ordered AB Nodes</th><th>Ordered AB Time</th>
+        <th>Reduction %</th>
+      </tr></thead><tbody>`;
+      data.rows.forEach(r => {
+        html += `<tr>
+          <td>${r.position}</td><td>${r.minimax_nodes}</td><td>${r.minimax_time_ms} ms</td>
+          <td>${r.alphabeta_nodes}</td><td>${r.alphabeta_time_ms} ms</td>
+          <td>${r.alphabeta_ordered_nodes}</td><td>${r.alphabeta_ordered_time_ms} ms</td>
+          <td style="color:var(--win); font-weight:bold;">${r.ordered_reduction_pct}%</td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+      wrap.innerHTML = html;
+    }
+
+    function renderBenchmarkChart(avg) {
+      const canvas = document.getElementById('bm-chart');
+      canvas.style.display = 'block';
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = canvas.clientWidth * dpr;
+      canvas.height = 200 * dpr;
+      ctx.scale(dpr, dpr);
+      const w = canvas.clientWidth;
+      const h = 200;
+
+      ctx.clearRect(0, 0, w, h);
+      const values = [avg.avg_minimax_nodes, avg.avg_alphabeta_nodes, avg.avg_alphabeta_ordered_nodes];
+      const labels = ['Minimax', 'Alpha-Beta', 'Ordered AB'];
+      const colors = ['#ef4444', '#38bdf8', '#22c55e'];
+      const maxVal = Math.max(...values, 1);
+
+      const barWidth = 60;
+      const spacing = (w - (barWidth * 3)) / 4;
+
+      values.forEach((v, i) => {
+        const x = spacing + i * (barWidth + spacing);
+        const barH = (v / maxVal) * (h - 60);
+        const y = h - 35 - barH;
+
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(x, y, barWidth, barH);
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(labels[i], x + barWidth / 2, h - 15);
+        ctx.fillText(`${Math.round(v)}`, x + barWidth / 2, y - 8);
+      });
+    }
+
+    // --- AI vs AI ---
+    let aiAnimTimer = null;
+    async function runAIvsAI() {
+      if (aiAnimTimer) clearInterval(aiAnimTimer);
+      const g = document.getElementById('aiai-game').value;
+      const algoA = document.getElementById('aiai-algo-a').value;
+      const lvlA = document.getElementById('aiai-lvl-a').value;
+      const algoB = document.getElementById('aiai-algo-b').value;
+      const lvlB = document.getElementById('aiai-lvl-b').value;
+
+      document.getElementById('aiai-status').innerText = 'Simulating AI vs AI match...';
+      const res = await fetch('/api/ai-vs-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game: g, algo_a: algoA, level_a: lvlA, algo_b: algoB, level_b: lvlB })
+      });
+      const data = await res.json();
+
+      const moveList = document.getElementById('aiai-move-list');
+      moveList.innerHTML = '';
+      data.history.forEach(h => {
+        const row = document.createElement('div');
+        row.style.padding = '4px 0';
+        row.style.borderBottom = '1px solid var(--border)';
+        row.innerHTML = `<strong>Step ${h.step}</strong> [${h.player.toUpperCase()}]: Move ${JSON.stringify(h.move)} | <em>${h.nodes} nodes, ${h.time_ms} ms</em>`;
+        moveList.appendChild(row);
+      });
+
+      let idx = 0;
+      aiAnimTimer = setInterval(() => {
+        if (idx >= data.history.length) {
+          clearInterval(aiAnimTimer);
+          const w = data.winner ? (data.winner === 'draw' ? 'Draw!' : `${data.winner.toUpperCase()} Won!`) : 'Match finished';
+          document.getElementById('aiai-status').innerText = `Finished! ${w}`;
+          return;
+        }
+        const stepData = data.history[idx];
+        document.getElementById('aiai-status').innerText = `Step ${stepData.step} / ${data.total_moves} - ${stepData.player.toUpperCase()} played ${JSON.stringify(stepData.move)}`;
+        renderReviewBoard(stepData.state, stepData.move, null);
+        idx++;
+      }, 500);
+    }
+
+    // Auto-init
+    window.onload = () => startNewGame();
+  </script>
+</body>
+</html>
